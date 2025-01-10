@@ -1,0 +1,12 @@
+.phishing-warning {
+    background-color: #ffebee !important;
+    border-left: 4px solid #f44336 !important;
+  }
+  
+  .phishing-warning::before {
+    content: "⚠️ Potential phishing";
+    color: #d32f2f;
+    font-weight: bold;
+    padding: 4px 8px;
+    font-size: 12px;
+  }

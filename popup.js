@@ -1,24 +1,48 @@
-document.getElementById('scan-button').addEventListener('click', async () => {
-    const resultsDiv = document.getElementById('results');
-    resultsDiv.innerHTML = 'Scanning your inbox...';
+document.addEventListener('DOMContentLoaded', function() {
+    const scanButton = document.getElementById('scanEmails');
+    const statusDiv = document.getElementById('status');
+    const scannedCount = document.getElementById('scannedCount');
+    const phishingCount = document.getElementById('phishingCount');
+  
+    scanButton.addEventListener('click', async () => {
+      statusDiv.textContent = 'Scanning emails...';
+      scanButton.disabled = true;
+  
+      try {
 
-    // Example: Make API call to scan Gmail
-    try {
-        // Retrieve token (use OAuth2 or stored token)
-        const accessToken = 'token'; // Replace with actual token
-
-        // Call Gmail API to fetch messages
-        const response = await fetch(
-            'https://www.googleapis.com/gmail/v1/users/me/messages',
-            {
-                headers: { Authorization: `Bearer ${accessToken}` }
+        chrome.runtime.sendMessage({ type: 'FETCH_EMAILS' }, async (emails) => {
+          if (chrome.runtime.lastError) {
+            throw new Error(chrome.runtime.lastError.message);
+          }
+  
+          statusDiv.textContent = 'Processing emails...';
+          scannedCount.textContent = emails.length;
+  
+       
+          const mockPhishingResults = emails.reduce((acc, email) => {
+            acc[email.id] = Math.random() > 0.8;
+            return acc;
+          }, {});
+  
+          const phishingEmails = Object.values(mockPhishingResults).filter(result => result).length;
+          phishingCount.textContent = phishingEmails;
+  
+        
+          chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs[0]) {
+              chrome.tabs.sendMessage(tabs[0].id, {
+                type: 'PHISHING_RESULTS',
+                results: mockPhishingResults
+              });
             }
-        );
-
-        const data = await response.json();
-        const messages = data.messages || [];
-        resultsDiv.innerHTML = `<p>Found ${messages.length} emails.</p>`;
-    } catch (error) {
-        resultsDiv.innerHTML = `<p>Error: ${error.message}</p>`;
-    }
-});
+          });
+  
+          statusDiv.textContent = 'Scan complete!';
+          scanButton.disabled = false;
+        });
+      } catch (error) {
+        statusDiv.textContent = 'Error: ' + error.message;
+        scanButton.disabled = false;
+      }
+    });
+  });

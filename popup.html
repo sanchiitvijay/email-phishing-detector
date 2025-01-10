@@ -1,34 +1,28 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gmail Physy Checker</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 10px;
-            width: 300px;
-        }
-        button {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 10px;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-    </style>
+  <title>Gmail Phishing Detector</title>
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-    <h2>Gmail Physy Checker</h2>
-    <p>Click below to scan your inbox for links.</p>
-    <button id="scan-button">Scan Inbox</button>
-    <div id="results" style="margin-top: 10px;"></div>
-    <script src="popup.js"></script>
+  <div class="container">
+    <h1>Gmail Phishing Detector</h1>
+    <button id="scanEmails">Scan Emails</button>
+    <div id="status"></div>
+    <div id="results">
+      <h2>Scan Results</h2>
+      <div id="stats">
+        <div class="stat">
+          <span>Scanned:</span>
+          <span id="scannedCount">0</span>
+        </div>
+        <div class="stat">
+          <span>Phishing Detected:</span>
+          <span id="phishingCount">0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="popup.js"></script>
 </body>
 </html>
