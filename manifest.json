@@ -1,34 +1,34 @@
 {
-    "manifest_version": 3,
-    "name": "Gmail Phishing Detector",
-    "version": "1.0",
-    "description": "Detects phishing attempts in Gmail",
-    "permissions": [
-      "identity",
-      "storage",
-      "activeTab"
-    ],
-    "host_permissions": [
-      "https://mail.google.com/*",
-      "https://www.googleapis.com/*"
-    ],
-    "oauth2": {
-      "client_id": "YOUR_CLIENT_ID_GENERATED_WITH_EXTENSION_ID_AND_TEST_EMAIL_ADDED",
-      "scopes": [
-        "https://www.googleapis.com/auth/gmail.readonly"
-      ]
-    },
-    "action": {
-      "default_popup": "popup.html"
-    },
-    "background": {
-      "service_worker": "background.js"
-    },
-    "content_scripts": [
-      {
-        "matches": ["https://mail.google.com/*"],
-        "js": ["content.js"],
-        "css": ["styles.css"]
-      }
+  "manifest_version": 3,
+  "name": "Gmail Phishing Detector",
+  "version": "1.0",
+  "description": "Detects phishing attempts in Gmail",
+  "permissions": [
+    "identity",
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://mail.google.com/*",
+    "https://www.googleapis.com/*"
+  ],
+  "oauth2": {
+    "client_id": "250116615315-qp28ho3jfl4dq1ls5ulq6pkp8ig2nq80.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/gmail.readonly"
     ]
-  }
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://mail.google.com/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ]
+}

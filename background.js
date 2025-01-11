@@ -1,5 +1,81 @@
 let accessToken = null;
 
+//content.js file data----------------------------------------
+
+
+let observer = null;
+
+function initializeGmailObserver() {
+  if (observer) {
+    observer.disconnect();
+  }
+
+  const container = document.querySelector('.AO');
+  if (!container) {
+    setTimeout(initializeGmailObserver, 1000);
+    return;
+  }
+
+  observer = new MutationObserver(() => {
+    const results = document.querySelector('.phishing-warning');
+    if (results) {
+      processPhishingResults(window.lastPhishingResults);
+    }
+  });
+
+  observer.observe(container, {
+    childList: true,
+    subtree: true
+  });
+}
+
+function findEmailByHeaders(subject, from) {
+  const emailRows = document.querySelectorAll('tr.zA');
+  return Array.from(emailRows).find(row => {
+    // Updated selectors to match Gmail's current structure
+    const subjectEl = row.querySelector('.y6');
+    const fromEl = row.querySelector('.yX, .zF');
+    if (!subjectEl || !fromEl) return false;
+    
+    return subjectEl.textContent.includes(subject) && 
+           fromEl.textContent.includes(from);
+  });
+}
+
+function processPhishingResults(phishingResults) {
+  if (!phishingResults) return;
+  
+  Object.entries(phishingResults).forEach(([id, result]) => {
+    if (result.isPhishing) {
+      const emailRow = findEmailByHeaders(result.subject, result.from);
+      if (emailRow && !emailRow.classList.contains('phishing-warning')) {
+        emailRow.classList.add('phishing-warning');
+      }
+    }
+  });
+}
+
+// Store results for reprocessing if needed
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === 'PHISHING_RESULTS') {
+    window.lastPhishingResults = request.results;
+    processPhishingResults(request.results);
+  }
+});
+
+// Initialize observer when script loads
+initializeGmailObserver();
+
+// Reinitialize when Gmail changes views
+window.addEventListener('popstate', initializeGmailObserver);
+window.addEventListener('pushstate', initializeGmailObserver);
+
+
+
+//------------------------------------------------------------
+
+
+
 // Initialize authentication on extension load
 chrome.runtime.onInstalled.addListener(() => {
   initializeAuth();
@@ -32,23 +108,69 @@ function refreshAuthToken() {
   });
 }
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type === 'FETCH_EMAILS') {
-    handleEmailFetch().then(sendResponse);
-    return true;
-  }
-});
 
-async function handleEmailFetch() {
-  if (!accessToken) {
-    try {
-      await refreshAuthToken();
-    } catch (error) {
-      throw new Error('Authentication failed');
-    }
+
+async function validateLinks(text) {
+  // Extract links using our previous function
+  const urlRegex = /(https?:\/\/|www\.)[^\s<>"\(\)]+/gi;
+  const matches = text.match(urlRegex) || [];
+  
+  const urls = matches.map(url => {
+      if (url.startsWith('www.')) {
+          return 'https://' + url;
+      }
+      return url;
+  });
+
+  let result = true;
+
+  // If no URLs found, return early
+  if (urls.length === 0) {
+      return result;
   }
-  return fetchEmails();
+
+  // Process URLs sequentially
+  // for (const url of urls) {
+  //     try {
+  //         // update it later
+  //         const response = await fetch("https:?wdegjflb", {
+  //             method: 'POST',
+  //             headers: {
+  //                 'Content-Type': 'application/json',
+  //             },
+  //             body: JSON.stringify({ url: url })
+  //         });
+
+  //         result = result && await response.json().result;
+
+          
+  //     } catch (error) {
+  //         // Handle API call errors
+  //         console.log("error: ", error);
+  //     }
+  // }
+
+  return result;
 }
+
+function manipulatingEmails(emails) {
+
+  emails.map(email => {
+    const body = email?.payload?.parts?.body?.data;
+    // Convert base64url to base64
+    let base64Data = body.replace(/-/g, '+').replace(/_/g, '/');
+    // Decode from base64 to original content
+    let decodedContent = atob(base64Data);
+    const result = validateLinks(decodedContent);
+
+    if(!result) {
+      findEmailByHeaders(email?.payload?.header['Subject'], email?.payload?.header['From']);
+    }
+  })
+
+}
+
+
 
 // async function fetchEmails() {
 //   try {
@@ -77,6 +199,20 @@ async function handleEmailFetch() {
 //     throw error;
 //   }
 // }
+
+
+
+async function fetchEmailDetails(messageId) {
+  const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`
+    }
+  });
+  console.log(response);
+  return await response.json();
+}
+
+
 
 async function fetchEmails() {
   try {
@@ -116,6 +252,8 @@ async function fetchEmails() {
     }));
 
     console.log('Final processed emails:', emails); // Add this
+    // Calling function here
+    manipulatingEmails(emails);
     
     return emails;
   } catch (error) {
@@ -124,12 +262,22 @@ async function fetchEmails() {
   }
 }
 
-async function fetchEmailDetails(messageId) {
-  const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}`, {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`
+
+
+async function handleEmailFetch() {
+  if (!accessToken) {
+    try {
+      await refreshAuthToken();
+    } catch (error) {
+      throw new Error('Authentication failed');
     }
-  });
-  console.log(response);
-  return await response.json();
+  }
+  return fetchEmails();
 }
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === 'FETCH_EMAILS') {
+    handleEmailFetch().then(sendResponse);
+    return true;
+  }
+});
