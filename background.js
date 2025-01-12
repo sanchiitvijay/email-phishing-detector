@@ -1,76 +1,80 @@
 let accessToken = null;
-
 //content.js file data----------------------------------------
-
-
-let observer = null;
-
-function initializeGmailObserver() {
-  if (observer) {
-    observer.disconnect();
-  }
-
-  const container = document.querySelector('.AO');
-  if (!container) {
-    setTimeout(initializeGmailObserver, 1000);
-    return;
-  }
-
-  observer = new MutationObserver(() => {
-    const results = document.querySelector('.phishing-warning');
-    if (results) {
-      processPhishingResults(window.lastPhishingResults);
-    }
-  });
-
-  observer.observe(container, {
-    childList: true,
-    subtree: true
-  });
-}
-
-function findEmailByHeaders(subject, from) {
-  const emailRows = document.querySelectorAll('tr.zA');
-  return Array.from(emailRows).find(row => {
-    // Updated selectors to match Gmail's current structure
-    const subjectEl = row.querySelector('.y6');
-    const fromEl = row.querySelector('.yX, .zF');
-    if (!subjectEl || !fromEl) return false;
+// chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+//   if (tab.url && tab.url.includes("https://mail.google.com")) {
     
-    return subjectEl.textContent.includes(subject) && 
-           fromEl.textContent.includes(from);
-  });
-}
+//     let observer = null;
+    
+//     function initializeGmailObserver() {
+//       if (observer) {
+//         observer.disconnect();
+//       }
+      
+//       const container = document.querySelector('.AO');
+//       if (!container) {
+//         setTimeout(initializeGmailObserver, 1000);
+//         return;
+//       }
+      
+//       observer = new MutationObserver(() => {
+//     const results = document.querySelector('.phishing-warning');
+//     if (results) {
+//       processPhishingResults(window.lastPhishingResults);
+//     }
+//   });
 
-function processPhishingResults(phishingResults) {
-  if (!phishingResults) return;
+//   observer.observe(container, {
+//     childList: true,
+//     subtree: true
+//   });
+// }
+
+// function findEmailByHeaders(subject, from) {
+//   const emailRows = document.querySelectorAll('tr.zA');
+//   return Array.from(emailRows).find(row => {
+//     // Updated selectors to match Gmail's current structure
+//     const subjectEl = row.querySelector('.y6');
+//     const fromEl = row.querySelector('.yX, .zF');
+//     if (!subjectEl || !fromEl) return false;
+    
+//     console.log("subject and from", subjectEl, fromEl);
+    
+//     return subjectEl.textContent.includes(subject) && 
+//     fromEl.textContent.includes(from);
+//   });
+// }
+
+// function processPhishingResults(phishingResults) {
+//   if (!phishingResults) return;
   
-  Object.entries(phishingResults).forEach(([id, result]) => {
-    if (result.isPhishing) {
-      const emailRow = findEmailByHeaders(result.subject, result.from);
-      if (emailRow && !emailRow.classList.contains('phishing-warning')) {
-        emailRow.classList.add('phishing-warning');
-      }
-    }
-  });
-}
+//   Object.entries(phishingResults).forEach(([id, result]) => {
+//     if (result.isPhishing) {
+//       const emailRow = findEmailByHeaders(result.subject, result.from);
+//       if (emailRow && !emailRow.classList.contains('phishing-warning')) {
+//         emailRow.classList.add('phishing-warning');
+//       }
+//     }
+//   });
+// }
 
-// Store results for reprocessing if needed
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type === 'PHISHING_RESULTS') {
-    window.lastPhishingResults = request.results;
-    processPhishingResults(request.results);
-  }
-});
+// // Store results for reprocessing if needed
+// chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+//   if (request.type === 'PHISHING_RESULTS') {
+//     window.lastPhishingResults = request.results;
+//     processPhishingResults(request.results);
+//   }
+// });
 
-// Initialize observer when script loads
-initializeGmailObserver();
+// // Initialize observer when script loads
+// initializeGmailObserver();
 
-// Reinitialize when Gmail changes views
-window.addEventListener('popstate', initializeGmailObserver);
-window.addEventListener('pushstate', initializeGmailObserver);
+// // Reinitialize when Gmail changes views
+// window.addEventListener('popstate', initializeGmailObserver);
+// window.addEventListener('pushstate', initializeGmailObserver);
 
 
+// }
+// })
 
 //------------------------------------------------------------
 
@@ -111,6 +115,7 @@ function refreshAuthToken() {
 
 
 async function validateLinks(text) {
+  console.log("validateLinks function: ",text)
   // Extract links using our previous function
   const urlRegex = /(https?:\/\/|www\.)[^\s<>"\(\)]+/gi;
   const matches = text.match(urlRegex) || [];
@@ -156,15 +161,42 @@ async function validateLinks(text) {
 function manipulatingEmails(emails) {
 
   emails.map(email => {
-    const body = email?.payload?.parts?.body?.data;
-    // Convert base64url to base64
-    let base64Data = body.replace(/-/g, '+').replace(/_/g, '/');
-    // Decode from base64 to original content
-    let decodedContent = atob(base64Data);
-    const result = validateLinks(decodedContent);
+    let bodyArr = email?.payload?.parts;
+    let body = "";
+    console.log("email data",  email);
+    for (let i of bodyArr) {
+      if (i?.body?.data) {
+        body += i.body.data; 
+      }
+    }
+    console.log("body data: ", body);
+    let subject = null; 
+    let from = null;
+    console.log(email?.payload?.headers)
+    for(let i of email?.payload?.headers) {
+      if(i?.name == 'Subject') subject = i?.value;
+      if(i?.name == 'From') from = i?.value;
+    }
+    console.log("other data: ", subject, from);
 
-    if(!result) {
-      findEmailByHeaders(email?.payload?.header['Subject'], email?.payload?.header['From']);
+
+    // Convert base64url to base64
+    // let base64Data = body?.replace(/-/g, '+')?.replace(/_/g, '/');
+    // // Decode from base64 to original content
+    // let decodedContent = atob(base64Data);
+    // console.log("decoded data: ", decodedContent);
+    // const result = validateLinks(decodedContent);
+
+    const result = false;
+
+    if(!result && subject && from) {
+      // Send message to content script to highlight the email
+      chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        chrome.tabs.sendMessage(tabs[0].id, {
+          type: 'HIGHLIGHT_EMAIL',
+          data: { subject, from }
+        });
+      });
     }
   })
 

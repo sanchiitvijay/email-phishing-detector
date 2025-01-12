@@ -6,14 +6,15 @@
   "permissions": [
     "identity",
     "storage",
-    "activeTab"
+    "activeTab",
+    "tabs"
   ],
   "host_permissions": [
     "https://mail.google.com/*",
     "https://www.googleapis.com/*"
   ],
   "oauth2": {
-    "client_id": "250116615315-qp28ho3jfl4dq1ls5ulq6pkp8ig2nq80.apps.googleusercontent.com",
+    "client_id": "998446090029-bmv8tj0b19toe0a132u8r6ahiqkk75li.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/gmail.readonly"
     ]
