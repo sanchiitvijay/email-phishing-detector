@@ -1,83 +1,12 @@
-let accessToken = null;
-//content.js file data----------------------------------------
 // chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 //   if (tab.url && tab.url.includes("https://mail.google.com")) {
-    
-//     let observer = null;
-    
-//     function initializeGmailObserver() {
-//       if (observer) {
-//         observer.disconnect();
-//       }
-      
-//       const container = document.querySelector('.AO');
-//       if (!container) {
-//         setTimeout(initializeGmailObserver, 1000);
-//         return;
-//       }
-      
-//       observer = new MutationObserver(() => {
-//     const results = document.querySelector('.phishing-warning');
-//     if (results) {
-//       processPhishingResults(window.lastPhishingResults);
-//     }
-//   });
-
-//   observer.observe(container, {
-//     childList: true,
-//     subtree: true
-//   });
-// }
-
-// function findEmailByHeaders(subject, from) {
-//   const emailRows = document.querySelectorAll('tr.zA');
-//   return Array.from(emailRows).find(row => {
-//     // Updated selectors to match Gmail's current structure
-//     const subjectEl = row.querySelector('.y6');
-//     const fromEl = row.querySelector('.yX, .zF');
-//     if (!subjectEl || !fromEl) return false;
-    
-//     console.log("subject and from", subjectEl, fromEl);
-    
-//     return subjectEl.textContent.includes(subject) && 
-//     fromEl.textContent.includes(from);
-//   });
-// }
-
-// function processPhishingResults(phishingResults) {
-//   if (!phishingResults) return;
-  
-//   Object.entries(phishingResults).forEach(([id, result]) => {
-//     if (result.isPhishing) {
-//       const emailRow = findEmailByHeaders(result.subject, result.from);
-//       if (emailRow && !emailRow.classList.contains('phishing-warning')) {
-//         emailRow.classList.add('phishing-warning');
-//       }
-//     }
-//   });
-// }
-
-// // Store results for reprocessing if needed
-// chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-//   if (request.type === 'PHISHING_RESULTS') {
-//     window.lastPhishingResults = request.results;
-//     processPhishingResults(request.results);
+//     console.log("in the loading tab---------------");
+//     importScripts('content.js')
 //   }
-// });
-
-// // Initialize observer when script loads
-// initializeGmailObserver();
-
-// // Reinitialize when Gmail changes views
-// window.addEventListener('popstate', initializeGmailObserver);
-// window.addEventListener('pushstate', initializeGmailObserver);
-
-
-// }
 // })
 
-//------------------------------------------------------------
 
+let accessToken = null;
 
 
 // Initialize authentication on extension load
@@ -158,51 +87,121 @@ async function validateLinks(text) {
   return result;
 }
 
-function manipulatingEmails(emails) {
+// Add this at the top of background.js
+let contentScriptReady = false;
 
-  emails.map(email => {
-    let bodyArr = email?.payload?.parts;
-    let body = "";
-    console.log("email data",  email);
-    for (let i of bodyArr) {
-      if (i?.body?.data) {
-        body += i.body.data; 
+// Listen for content script ready message
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'CONTENT_SCRIPT_READY') {
+    contentScriptReady = true;
+    console.log('Content script is ready in tab:', sender.tab.id);
+    sendResponse({ received: true });
+  }
+  return true;
+});
+
+// Modified sendMessageToTab function with retry logic
+function sendMessageToTab(tab, subject, from, retryCount = 0) {
+  const maxRetries = 3;
+  const retryDelay = 1000; // 1 second
+
+  console.log(`Attempting to send message to tab ${tab.id}, retry: ${retryCount}`);
+
+  chrome.tabs.sendMessage(
+    tab.id,
+    {
+      type: 'HIGHLIGHT_EMAIL',
+      data: { subject, from }
+    },
+    (response) => {
+      if (chrome.runtime.lastError) {
+        console.error("Error sending message:", chrome.runtime.lastError);
+        
+        // Retry logic
+        if (retryCount < maxRetries) {
+          console.log(`Retrying in ${retryDelay}ms...`);
+          setTimeout(() => {
+            sendMessageToTab(tab, subject, from, retryCount + 1);
+          }, retryDelay);
+        } else {
+          console.error("Max retries reached for tab:", tab.id);
+        }
+        return;
       }
+      console.log("Message sent successfully to tab:", tab.id);
     }
-    console.log("body data: ", body);
-    let subject = null; 
-    let from = null;
-    console.log(email?.payload?.headers)
-    for(let i of email?.payload?.headers) {
-      if(i?.name == 'Subject') subject = i?.value;
-      if(i?.name == 'From') from = i?.value;
-    }
-    console.log("other data: ", subject, from);
-
-
-    // Convert base64url to base64
-    // let base64Data = body?.replace(/-/g, '+')?.replace(/_/g, '/');
-    // // Decode from base64 to original content
-    // let decodedContent = atob(base64Data);
-    // console.log("decoded data: ", decodedContent);
-    // const result = validateLinks(decodedContent);
-
-    const result = false;
-
-    if(!result && subject && from) {
-      // Send message to content script to highlight the email
-      chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-        chrome.tabs.sendMessage(tabs[0].id, {
-          type: 'HIGHLIGHT_EMAIL',
-          data: { subject, from }
-        });
-      });
-    }
-  })
-
+  );
 }
 
+function manipulatingEmails(emails) {
+  if (!emails || emails.length === 0) {
+    console.log("No emails to process");
+    return;
+  }
 
+  emails.forEach(async (email) => {
+    try {
+      let bodyArr = email?.payload?.parts;
+      let body = "";
+      let subject = null;
+      let from = null;
+
+      if (bodyArr) {
+        for (let i of bodyArr) {
+          if (i?.body?.data) {
+            body += i.body.data;
+          }
+        }
+      }
+
+      if (email?.payload?.headers) {
+        for (let i of email.payload.headers) {
+          if (i?.name === 'Subject') subject = i.value;
+          if (i?.name === 'From') from = i.value;
+        }
+      }
+
+      console.log("Processing email:", { subject, from });
+
+      const result = false; // Your phishing detection logic here
+
+      if (!result && subject && from) {
+        // First try to find Gmail tabs
+        findEmailByHeaders(subject, from);
+
+      //   chrome.tabs.query({
+      //     url: "https://mail.google.com/*"
+      //   }, function(tabs) {
+      //     console.log("Found Gmail tabs:", tabs);
+
+      //     if (!tabs || tabs.length === 0) {
+      //       // Fallback to active tab if no Gmail tabs found
+      //       chrome.tabs.query({ active: true, currentWindow: true }, function(activeTabs) {
+      //         console.log("Active tabs:", activeTabs);
+      //         if (activeTabs && activeTabs.length > 0) {
+      //           const activeTab = activeTabs[0];
+      //           if (activeTab.url && activeTab.url.includes("mail.google.com")) {
+      //             sendMessageToTab(activeTab, subject, from);
+      //           } else {
+      //             console.log("Active tab is not Gmail");
+      //           }
+      //         } else {
+      //           console.log("No active tabs found");
+      //         }
+      //       });
+      //     } else {
+      //       // Send to all Gmail tabs
+      //       tabs.forEach(tab => {
+      //         sendMessageToTab(tab, subject, from);
+      //       });
+      //     }
+      //   });
+      }
+    } catch (error) {
+      console.error("Error processing email:", error);
+    }
+  });
+}
 
 // async function fetchEmails() {
 //   try {
@@ -278,8 +277,8 @@ async function fetchEmails() {
     }
     
     const emails = await Promise.all(data.messages.map(async message => {
-      console.log('Fetching details for message:', message.id); // Add this
-      const details = await fetchEmailDetails(message.id);
+      console.log('Fetching details for message:', message?.id); // Add this
+      const details = await fetchEmailDetails(message?.id);
       return details;
     }));
 

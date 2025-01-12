@@ -1,3 +1,35 @@
+//---------------------------------------
+
+
+// Add this at the start of content.js, right after your variable declarations
+console.log('Content script starting...');
+
+// Function to announce content script is ready
+function announceContentScriptReady() {
+  chrome.runtime.sendMessage({ 
+    type: 'CONTENT_SCRIPT_READY' 
+  }, response => {
+    if (chrome.runtime.lastError) {
+      console.error('Error announcing ready state:', chrome.runtime.lastError);
+      // Retry after a delay
+      setTimeout(announceContentScriptReady, 1000);
+    } else {
+      console.log('Successfully announced content script ready state');
+    }
+  });
+}
+
+// Call it after DOM is ready
+if (document.readyState === 'complete') {
+  announceContentScriptReady();
+} else {
+  document.addEventListener('DOMContentLoaded', announceContentScriptReady);
+}
+
+//---------------------------------------
+
+
+
 // Global observer to handle Gmail's dynamic loading
 let observer = null;
 
@@ -104,7 +136,7 @@ function processPhishingResults(phishingResults) {
   
   console.log('Processing phishing results:', phishingResults);
 
-  Object.entries(phishingResults).forEach(([id, result]) => {
+  Object.entries(phishingResults).forEach(([result]) => {
     if (result.isPhishing) {
       const emailRow = findEmailByHeaders(result.subject, result.from);
       if (emailRow && !emailRow.classList.contains('phishing-warning')) {
