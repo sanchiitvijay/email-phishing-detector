@@ -13,7 +13,7 @@ class PhishingDetector {
       from,
       subject,
       body,
-      messageId: email.id
+      messageId: email?.id
     };
   }
 
