@@ -45,44 +45,27 @@ function refreshAuthToken() {
 
 async function validateLinks(text) {
   console.log("validateLinks function: ",text)
-  // Extract links using our previous function
-  const urlRegex = /(https?:\/\/|www\.)[^\s<>"\(\)]+/gi;
-  const matches = text.match(urlRegex) || [];
-  
-  const urls = matches.map(url => {
-      if (url.startsWith('www.')) {
-          return 'https://' + url;
-      }
-      return url;
-  });
 
   let result = true;
 
-  // If no URLs found, return early
-  if (urls.length === 0) {
-      return result;
-  }
-
   // Process URLs sequentially
-  // for (const url of urls) {
-  //     try {
-  //         // update it later
-  //         const response = await fetch("https:?wdegjflb", {
-  //             method: 'POST',
-  //             headers: {
-  //                 'Content-Type': 'application/json',
-  //             },
-  //             body: JSON.stringify({ url: url })
-  //         });
+      try {
+          // update it later
+          const response = await fetch("http://13.61.146.108/check_url", {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ body: text })
+          });
 
-  //         result = result && await response.json().result;
+          result = await response.json().result;
 
           
-  //     } catch (error) {
-  //         // Handle API call errors
-  //         console.log("error: ", error);
-  //     }
-  // }
+      } catch (error) {
+          // Handle API call errors
+          console.log("error: ", error);
+      }
 
   return result;
 }
@@ -161,8 +144,13 @@ function manipulatingEmails(emails) {
       // Extract email address from the "from" field
       const fromEmail = from?.match(/<(.+?)>/)?.[1] || from;
 
+      // extract the body 
+      arr = []
+      for(i in email?.payload?.parts){
+        arr.push(i?.body?.data);
+      }
       // Check if email is phishing
-      const isPhishing = checkPhishing(subject || '', fromEmail || '');
+      const isPhishing = validateLinks(arr);
 
       console.log("Processing email:", {
         id: email.id,
@@ -252,48 +240,6 @@ function sendResultsToTab(tab, results) {
   });
 }
 
-// Function to extract links from text
-function extractLinks(text) {
-  const urlRegex = /(https?:\/\/[^\s<>"]+|www\.[^\s<>"]+)/g;
-  return text.match(urlRegex) || [];
-}
-
-// Function to decode base64
-function decodeBase64(str) {
-  try {
-    return atob(str.replace(/-/g, '+').replace(/_/g, '/'));
-  } catch (e) {
-    return str;
-  }
-}
-
-// async function fetchEmails() {
-//   try {
-//     const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=10', {
-//       headers: {
-//         'Authorization': `Bearer ${accessToken}`
-//       }
-//     });
-    
-//     if (response.status === 401) {
-//       await refreshAuthToken();
-//       return fetchEmails();
-//     }
-
-//     if (!response.ok) {
-//       throw new Error(`Gmail API error: ${response.status}`);
-//     }
-
-//     const data = await response.json();
-//     console.log(data);
-//     return data.messages ? 
-//       await Promise.all(data.messages.map(message => fetchEmailDetails(message.id))) : 
-//       [];
-//   } catch (error) {
-//     console.error('Error fetching emails:', error);
-//     throw error;
-//   }
-// }
 
 
 
