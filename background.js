@@ -134,25 +134,22 @@ function sendMessageToTab(tab, subject, from, retryCount = 0) {
 }
 
 function manipulatingEmails(emails) {
+  console.log("Starting email manipulation with emails:", emails?.length);
+  
   if (!emails || emails.length === 0) {
     console.log("No emails to process");
     return;
   }
 
-  emails.forEach(async (email) => {
+  let phishingResults = {
+    type: 'PHISHING_RESULTS',
+    results: {}
+  };
+
+  emails.forEach(email => {
     try {
-      let bodyArr = email?.payload?.parts;
-      let body = "";
       let subject = null;
       let from = null;
-
-      if (bodyArr) {
-        for (let i of bodyArr) {
-          if (i?.body?.data) {
-            body += i.body.data;
-          }
-        }
-      }
 
       if (email?.payload?.headers) {
         for (let i of email.payload.headers) {
@@ -161,46 +158,113 @@ function manipulatingEmails(emails) {
         }
       }
 
-      console.log("Processing email:", { subject, from });
+      // Extract email address from the "from" field
+      const fromEmail = from?.match(/<(.+?)>/)?.[1] || from;
 
-      const result = false; // Your phishing detection logic here
+      // Check if email is phishing
+      const isPhishing = checkPhishing(subject || '', fromEmail || '');
 
-      if (!result && subject && from) {
-        // First try to find Gmail tabs
-        findEmailByHeaders(subject, from);
+      console.log("Processing email:", {
+        id: email.id,
+        subject,
+        from: fromEmail,
+        isPhishing
+      });
 
-      //   chrome.tabs.query({
-      //     url: "https://mail.google.com/*"
-      //   }, function(tabs) {
-      //     console.log("Found Gmail tabs:", tabs);
-
-      //     if (!tabs || tabs.length === 0) {
-      //       // Fallback to active tab if no Gmail tabs found
-      //       chrome.tabs.query({ active: true, currentWindow: true }, function(activeTabs) {
-      //         console.log("Active tabs:", activeTabs);
-      //         if (activeTabs && activeTabs.length > 0) {
-      //           const activeTab = activeTabs[0];
-      //           if (activeTab.url && activeTab.url.includes("mail.google.com")) {
-      //             sendMessageToTab(activeTab, subject, from);
-      //           } else {
-      //             console.log("Active tab is not Gmail");
-      //           }
-      //         } else {
-      //           console.log("No active tabs found");
-      //         }
-      //       });
-      //     } else {
-      //       // Send to all Gmail tabs
-      //       tabs.forEach(tab => {
-      //         sendMessageToTab(tab, subject, from);
-      //       });
-      //     }
-      //   });
+      if (subject && fromEmail) {
+        phishingResults.results[email.id] = {
+          isPhishing,
+          subject: subject.trim(),
+          from: fromEmail.trim(),
+          id: email.id
+        };
       }
     } catch (error) {
       console.error("Error processing email:", error);
     }
   });
+
+  // Log the final results
+  console.log("Final phishing results:", JSON.stringify(phishingResults, null, 2));
+
+  // Send results to content script
+  chrome.tabs.query({ url: "https://mail.google.com/*" }, function(tabs) {
+    if (tabs.length === 0) {
+      chrome.tabs.query({ active: true, currentWindow: true }, function(activeTabs) {
+        if (activeTabs && activeTabs.length > 0) {
+          sendResultsToTab(activeTabs[0], phishingResults);
+        }
+      });
+    } else {
+      tabs.forEach(tab => {
+        console.log("Sending results to Gmail tab:", tab.id);
+        sendResultsToTab(tab, phishingResults);
+      });
+    }
+  });
+}
+
+function checkPhishing(subject, from) {
+  // Keywords that might indicate phishing
+  const suspiciousKeywords = [
+    'hiring',
+    'remote work',
+    'work from home',
+    'job',
+    'opportunity',
+    'apply now',
+    'freelancer',
+    'multiple roles',
+    'entry level'
+  ];
+
+  // Suspicious sender domains
+  const suspiciousDomains = [
+    'noreply',
+    'newsletters-noreply',
+    'notifications-noreply',
+    'groups-noreply'
+  ];
+
+  // Check if subject contains suspicious keywords
+  const hasKeyword = suspiciousKeywords.some(keyword => 
+    subject.toLowerCase().includes(keyword.toLowerCase())
+  );
+
+  // Check if sender contains suspicious patterns
+  const hasSuspiciousSender = suspiciousDomains.some(domain => 
+    from.toLowerCase().includes(domain.toLowerCase())
+  );
+
+  // Mark as phishing if both conditions are met
+  return hasKeyword && hasSuspiciousSender;
+}
+
+function sendResultsToTab(tab, results) {
+  console.log("Sending to tab:", tab.id, "Results:", JSON.stringify(results, null, 2));
+  
+  chrome.tabs.sendMessage(tab.id, results, response => {
+    if (chrome.runtime.lastError) {
+      console.error("Error sending results:", chrome.runtime.lastError);
+    } else {
+      console.log("Results sent successfully to tab:", tab.id);
+    }
+  });
+}
+
+// Function to extract links from text
+function extractLinks(text) {
+  const urlRegex = /(https?:\/\/[^\s<>"]+|www\.[^\s<>"]+)/g;
+  return text.match(urlRegex) || [];
+}
+
+// Function to decode base64
+function decodeBase64(str) {
+  try {
+    return atob(str.replace(/-/g, '+').replace(/_/g, '/'));
+  } catch (e) {
+    return str;
+  }
 }
 
 // async function fetchEmails() {

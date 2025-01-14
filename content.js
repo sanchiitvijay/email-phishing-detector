@@ -68,103 +68,143 @@ function initializeGmailObserver() {
 
 // Function to find email by subject and sender
 function findEmailByHeaders(subject, from) {
-  console.log('Searching for email:', { subject, from });
+  console.log('Finding email:', { subject, from });
 
-  // Get all email rows
-  const emailRows = document.querySelectorAll('tr.zA');
-  console.log(`Found ${emailRows.length} email rows`);
+  // Get all possible email row elements
+  const selectors = [
+    'tr.zA',
+    'tr.zE',
+    'tr[role="row"]',
+    '.zA[role="row"]',
+    'div[role="row"]'
+  ];
 
-  // Search through rows
-  const matchingRow = Array.from(emailRows).find(row => {
-    // Get subject and sender elements
-    const subjectEl = row.querySelector('.y6');
-    const fromEl = row.querySelector('.yX, .zF');
-
-    // Log the elements for debugging
-    console.log('Checking row elements:', {
-      subjectElement: subjectEl?.textContent,
-      fromElement: fromEl?.textContent
-    });
-
-    if (!subjectEl || !fromEl) {
-      console.log('Missing subject or from element');
-      return false;
-    }
-
-    // Check if subject and sender match
-    const subjectMatch = subjectEl.textContent.includes(subject);
-    const fromMatch = fromEl.textContent.includes(from);
-
-    console.log('Matching results:', {
-      subject: subjectMatch,
-      from: fromMatch,
-      rowSubject: subjectEl.textContent,
-      rowFrom: fromEl.textContent
-    });
-
-    return subjectMatch && fromMatch;
+  let allRows = [];
+  selectors.forEach(selector => {
+    const rows = document.querySelectorAll(selector);
+    console.log(`Found ${rows.length} rows with selector: ${selector}`);
+    allRows = [...allRows, ...Array.from(rows)];
   });
 
-  // If email found, add warning class
-  if (matchingRow) {
-    console.log('Found matching email, adding warning class');
-    matchingRow.classList.add('phishing-warning');
-    
-    // Add warning icon
-    const firstCell = matchingRow.querySelector('td');
-    if (firstCell && !firstCell.querySelector('.phishing-icon')) {
-      const warningIcon = document.createElement('span');
-      warningIcon.className = 'phishing-icon';
-      warningIcon.innerHTML = '⚠️';
-      warningIcon.title = 'Potential phishing attempt detected';
-      firstCell.insertBefore(warningIcon, firstCell.firstChild);
+  // Remove duplicates
+  allRows = [...new Set(allRows)];
+  console.log(`Total unique email rows found: ${allRows.length}`);
+
+  // Find the matching email
+  for (const row of allRows) {
+    try {
+      // Try different ways to get subject and sender
+      const subjectElement = row.querySelector('[data-thread-id] [email]') || 
+                            row.querySelector('[data-thread-id] span') ||
+                            row.querySelector('span[data-thread-id]') ||
+                            row.querySelector('[data-legacy-thread-id]') ||
+                            row.querySelector('[data-tooltip]');
+
+      const fromElement = row.querySelector('[email]') ||
+                         row.querySelector('.yP, .zF') ||
+                         row.querySelector('[name="from"]') ||
+                         row.querySelector('[data-hovercard-id]');
+
+      if (!subjectElement || !fromElement) {
+        continue;
+      }
+
+      const rowSubject = (subjectElement.getAttribute('data-tooltip') || 
+                         subjectElement.textContent || '').trim();
+      const rowFrom = (fromElement.getAttribute('email') || 
+                      fromElement.getAttribute('name') || 
+                      fromElement.textContent || '').trim();
+
+      console.log('Checking row:', { rowSubject, rowFrom });
+
+      // Check if this row matches our email
+      if (rowSubject.includes(subject) || subject.includes(rowSubject) ||
+          rowFrom.includes(from) || from.includes(rowFrom)) {
+        console.log('Found matching email row:', row);
+        return row;
+      }
+    } catch (error) {
+      console.error('Error processing row:', error);
     }
-    
-    return matchingRow;
-  } else {
-    console.log('No matching email found');
-    return null;
   }
+
+  console.log('Could not find matching email row in DOM');
+  return null;
+}
+
+// Function to highlight suspicious links in an email
+function highlightSuspiciousLinks(emailRow, links) {
+  if (!links || !links.length) return;
+
+  // Find all links in the email row
+  const linkElements = emailRow.querySelectorAll('a[href]');
+  
+  linkElements.forEach(linkEl => {
+    const href = linkEl.href;
+    // Find if this link is marked as suspicious
+    const suspiciousLink = links.find(link => 
+      href.includes(link.url) && link.suspicious
+    );
+
+    if (suspiciousLink) {
+      console.log('Found suspicious link:', href);
+      linkEl.classList.add('suspicious-link');
+      linkEl.title = 'This link may be suspicious';
+    }
+  });
 }
 
 // Function to process phishing results
-function processPhishingResults(phishingResults) {
-  if (!phishingResults) {
-    console.log('No phishing results to process');
+function processPhishingResults(response) {
+  console.log('Processing phishing results:', JSON.stringify(response, null, 2));
+
+  if (!response || !response.results) {
+    console.log('No valid phishing results to process');
     return;
   }
-  
-  console.log('Processing phishing results:', phishingResults);
 
-  Object.entries(phishingResults).forEach(([result]) => {
+  const results = response.results;
+  const resultCount = Object.keys(results).length;
+  console.log(`Processing ${resultCount} results`);
+
+  Object.values(results).forEach((result, index) => {
+    console.log(`Processing result ${index + 1}/${resultCount}:`, result);
+    
     if (result.isPhishing) {
+      console.log('Found phishing email:', result);
       const emailRow = findEmailByHeaders(result.subject, result.from);
-      if (emailRow && !emailRow.classList.contains('phishing-warning')) {
-        emailRow.classList.add('phishing-warning');
-        console.log('Added phishing warning to email:', result.subject);
+      if (emailRow) {
+        console.log('Successfully highlighted email');
+        emailRow.style.backgroundColor = '#ffebee';
+        emailRow.style.borderLeft = '4px solid #f44336';
+        
+        // Add a warning icon
+        const warningIcon = document.createElement('span');
+        warningIcon.innerHTML = '⚠️';
+        warningIcon.style.marginRight = '8px';
+        warningIcon.title = 'Potential phishing email';
+        
+        // Insert the warning icon at the beginning of the row
+        const firstCell = emailRow.querySelector('td');
+        if (firstCell) {
+          firstCell.insertBefore(warningIcon, firstCell.firstChild);
+        }
+      } else {
+        console.log('Could not find matching email row in DOM');
       }
     }
   });
 }
 
-
 // Listen for messages from the background script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('Received message:', request);
-
-  if (request.type === 'HIGHLIGHT_EMAIL') {
-    console.log('Processing highlight email request:', request.data);
-    const { subject, from } = request.data;
-    findEmailByHeaders(subject, from);
-  }
+  console.log('Content script received message:', JSON.stringify(request, null, 2));
 
   if (request.type === 'PHISHING_RESULTS') {
-    console.log('Processing phishing results');
-    window.lastPhishingResults = request.results;
-    processPhishingResults(request.results);
+    processPhishingResults(request);
+    sendResponse({ status: 'processed' });
   }
 
-  // Return true to indicate async response
   return true;
 });
 
@@ -187,11 +227,51 @@ window.addEventListener('pushstate', () => {
 const style = document.createElement('style');
 style.textContent = `
   .phishing-warning {
-    background-color: rgba(255, 0, 0, 0.1) !important;
+    background-color: #ffebee !important;
+    border-left: 4px solid #f44336 !important;
+    transition: background-color 0.3s ease !important;
   }
+  
+  .phishing-warning:hover {
+    background-color: #ffcdd2 !important;
+  }
+  
   .phishing-icon {
     margin-right: 8px;
     cursor: help;
+    display: inline-flex;
+    align-items: center;
+    font-size: 16px;
+    color: #f44336;
+  }
+
+  .suspicious-link {
+    background-color: #fff3cd !important;
+    border: 1px solid #ffeeba !important;
+    padding: 2px 4px !important;
+    border-radius: 3px !important;
+    position: relative !important;
+  }
+
+  .suspicious-link::after {
+    content: '⚠️';
+    margin-left: 4px;
+    font-size: 12px;
+  }
+
+  .suspicious-link:hover::before {
+    content: 'Suspicious link detected';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 1000;
   }
 `;
 document.head.appendChild(style);
